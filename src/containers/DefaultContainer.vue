@@ -152,6 +152,7 @@ export default {
             permissions.SYSTEM_CONFIGURATION_READ,
             permissions.SYSTEM_CONFIGURATION_UPDATE,
             permissions.SYSTEM_CONFIGURATION_DELETE,
+            permissions.COMPONENT_ANALYSIS,
           ],
         },
         {
@@ -164,6 +165,7 @@ export default {
             permissions.POLICY_MANAGEMENT_READ,
             permissions.POLICY_MANAGEMENT_UPDATE,
             permissions.POLICY_MANAGEMENT_DELETE,
+            permissions.COMPONENT_ANALYSIS,
           ],
         },
         {

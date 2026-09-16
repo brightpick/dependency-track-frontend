@@ -337,7 +337,11 @@ function configRoutes() {
             i18n: 'message.policy_management',
             sectionPath: '/policy',
             sectionName: 'Policy Management',
-            permissions: ['POLICY_MANAGEMENT', 'POLICY_MANAGEMENT_CREATE'],
+            permissions: [
+              'POLICY_MANAGEMENT',
+              'POLICY_MANAGEMENT_CREATE',
+              'COMPONENT_ANALYSIS',
+            ],
           },
         },
         {
@@ -350,7 +354,11 @@ function configRoutes() {
             i18n: 'message.policy_management',
             sectionPath: '/policy',
             sectionName: 'Policy Management',
-            permissions: ['POLICY_MANAGEMENT', 'POLICY_MANAGEMENT_READ'],
+            permissions: [
+              'POLICY_MANAGEMENT',
+              'POLICY_MANAGEMENT_READ',
+              'COMPONENT_ANALYSIS',
+            ],
           },
         },
         {
@@ -399,6 +407,7 @@ function configRoutes() {
               'POLICY_MANAGEMENT_READ',
               'POLICY_MANAGEMENT_UPDATE',
               'POLICY_MANAGEMENT_DELETE',
+              'COMPONENT_ANALYSIS',
             ],
           },
         },

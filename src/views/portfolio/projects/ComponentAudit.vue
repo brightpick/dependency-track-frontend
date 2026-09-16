@@ -287,7 +287,8 @@ export default {
   },
   computed: {
     canEdit: function () {
-      return this.isPermitted(this.PERMISSIONS.POLICY_MANAGEMENT);
+      // curation is its own authority, distinct from managing policies
+      return this.isPermitted(this.PERMISSIONS.COMPONENT_ANALYSIS);
     },
     uploadedLicense: function () {
       // the snapshot the analysis keeps is the uploaded value whenever an
