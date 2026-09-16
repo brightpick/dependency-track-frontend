@@ -97,8 +97,14 @@ export default {
           field: 'license',
           sortable: true,
           visible: initialColumnVisible('license', true),
-          formatter: (value) =>
-            xssFilters.inHTMLData(common.valueWithDefault(value, '')),
+          // an override fills exactly one of the three license slots
+          formatter: (value, row) =>
+            xssFilters.inHTMLData(
+              common.valueWithDefault(
+                value || row.license_expression || row.license_name,
+                '',
+              ),
+            ),
         },
         {
           title: 'Details',

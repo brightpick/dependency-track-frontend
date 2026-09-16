@@ -223,6 +223,9 @@ export default {
       visibleColumns: initialVisibleColumns,
       columns: this.buildColumns(),
       analysisByIdentity: {},
+      // a detail row to open again after a refresh the panel itself caused,
+      // by the row's uuid so a re-sorted or re-paged body opens the same one
+      reexpandRowUuid: null,
       tableOptions: {
         toolbar: '#componentsToolbar',
         onRefresh: () => {
@@ -236,6 +239,7 @@ export default {
         detailView: true,
         detailViewIcon: true,
         detailViewByClick: false,
+        uniqueId: 'uuid',
         detailFormatter: (index, row) => {
           return (
             row &&
@@ -244,6 +248,21 @@ export default {
               propsData: {
                 component: row,
                 projectUuid: this.uuid,
+                // the panel is its own Vue root: a callback stands in for an
+                // event. A saved change re-reads the analyses; when the
+                // markers change the page re-renders, which closes the
+                // detail row, so it is expanded again once the body is back.
+                onChanged: () =>
+                  this.fetchComponentAnalyses()
+                    .then((changed) => {
+                      if (changed) {
+                        this.reexpandRowUuid = row.uuid;
+                      }
+                    })
+                    .catch((error) => {
+                      this.reexpandRowUuid = null;
+                      throw error;
+                    }),
               },
               ...ComponentAudit,
             })
@@ -259,6 +278,18 @@ export default {
         onPostBody: () => {
           this.vueFormatterInit();
           this.initializeTooltips();
+          // the paginated wrapper does not proxy row methods; the
+          // bootstrap-table component is its own ref
+          const table = this.$refs.table && this.$refs.table.$refs.table;
+          if (
+            this.reexpandRowUuid !== null &&
+            table &&
+            typeof table.expandRowByUniqueId === 'function'
+          ) {
+            const uuid = this.reexpandRowUuid;
+            this.reexpandRowUuid = null;
+            table.expandRowByUniqueId(uuid);
+          }
         },
         onColumnSwitch: (field, checked) => {
           if (localStorage) {
@@ -482,12 +513,19 @@ export default {
           visible: initialColumnVisible('override'),
           formatter: (value, row) => {
             const analysis = this.analysisByIdentity[this.identityKey(row)];
-            if (!analysis || !analysis.license) {
+            // an override fills exactly one of the three license slots
+            const override =
+              analysis &&
+              (analysis.license ||
+                analysis.license_expression ||
+                analysis.license_name);
+            if (!override) {
               return '';
             }
+            // the value lands inside a quoted attribute
             return (
               '<i class="fa fa-balance-scale" data-toggle="tooltip" title="' +
-              xssFilters.inHTMLData('License override: ' + analysis.license) +
+              xssFilters.inDoubleQuotedAttr('License override: ' + override) +
               '"></i>'
             );
           },
@@ -705,21 +743,32 @@ export default {
         norm(row.version),
       ].join('|');
     },
+    // resolves to whether the markers changed
     fetchComponentAnalyses() {
       const url = `${this.$api.BASE_URL}/api/v2/component-analyses?project=${this.uuid}`;
-      this.axios.get(url).then((response) => {
+      return this.axios.get(url).then((response) => {
         const map = {};
         for (const analysis of response.data.analyses || []) {
           map[this.identityKey(analysis)] = analysis;
         }
-        // re-render only when the flags actually changed — onRefresh calls
-        // this too, and an unconditional re-render would loop
-        const changed =
-          JSON.stringify(map) !== JSON.stringify(this.analysisByIdentity);
+        // re-render only when a marker changes — onRefresh calls this too,
+        // and an unconditional re-render would loop. The marker shows the
+        // override slot, so details, ids and snapshots do not count.
+        const markers = (analyses) =>
+          JSON.stringify(
+            Object.fromEntries(
+              Object.entries(analyses).map(([key, a]) => [
+                key,
+                a.license || a.license_expression || a.license_name || null,
+              ]),
+            ),
+          );
+        const changed = markers(map) !== markers(this.analysisByIdentity);
         this.analysisByIdentity = map;
         if (changed && this.$refs.table) {
           this.$refs.table.refreshCurrentPage();
         }
+        return changed;
       });
     },
   },
