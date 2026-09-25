@@ -338,11 +338,61 @@ export default {
     },
     createPolicyHelp: function () {
       return (
-        'Creates a component policy for this package URL: in every project, ' +
-        'each BOM import gives the matching components this license. A manual ' +
-        'override on a component still wins. Refine the rule in Policy ' +
-        'Management afterwards — e.g. drop the version to cover all versions.'
+        'Creates a component policy for this package URL AND the two license ' +
+        'readings it was decided on: in every project, each BOM import gives ' +
+        'the matching components this license. Should the scanner or the ' +
+        'resolver later read something else, the rule stops matching and the ' +
+        'component comes back for a decision. A manual override on a ' +
+        'component still wins. Refine the rule in Policy Management ' +
+        'afterwards — e.g. drop the version to cover all versions.'
       );
+    },
+    // The inputs the decision was taken on, as CEL clauses. Component policies
+    // run before the curation is applied (ImportBomActivity), so the component
+    // still carries what the BOM declared — pinning it is what expires the
+    // rule when the scanner changes its reading.
+    decisionInputClauses: function () {
+      const quote = (v) =>
+        '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+      const property = (name, value) =>
+        'component.properties.exists(p, p.group == "brightscan" && p.name == ' +
+        quote(name) +
+        ' && p.value == ' +
+        quote(value) +
+        ')';
+      const clauses = [];
+
+      const c = this.liveComponent || this.component;
+      const resolved = c.resolved_license || c.resolvedLicense;
+      const resolvedId =
+        resolved && (resolved.license_id || resolved.licenseId);
+      const expression = c.license_expression || c.licenseExpression;
+      if (resolvedId) {
+        clauses.push(
+          'has(component.resolved_license) && component.resolved_license.id == ' +
+            quote(resolvedId),
+        );
+      } else if (expression) {
+        clauses.push('component.license_expression == ' + quote(expression));
+      } else if (c.license) {
+        clauses.push('component.license_name == ' + quote(c.license));
+      }
+
+      const prop = (name) => {
+        const match = this.properties.find(
+          (p) => p.groupName === 'brightscan' && p.propertyName === name,
+        );
+        return match ? match.propertyValue : null;
+      };
+      const verdict = prop('license:verdict');
+      const said = prop('license:resolver');
+      if (verdict) {
+        clauses.push(property('license:verdict', verdict));
+      }
+      if (said) {
+        clauses.push(property('license:resolver', said));
+      }
+      return clauses;
     },
     overrideTextPlaceholder: function () {
       return 'MIT AND Apache-2.0 — every operand a license of the catalogue (create missing ones on the License page)';
@@ -612,12 +662,17 @@ export default {
       const name = `curation ${purl}`;
       // a CEL string literal: escape what would end it
       const literal = purl.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      // the package, and the two readings the decision was taken on — a later
+      // change to either expires the rule instead of curating on stale input
+      const condition = [`component.purl == "${literal}"`]
+        .concat(this.decisionInputClauses)
+        .join('\n  && ');
       const url = `${this.$api.BASE_URL}/api/v2/component-policies`;
       this.axios
         .post(url, {
           name: name,
           description: `Created from the component audit of ${this.component.name}@${this.component.version || ''}`,
-          condition: `component.purl == "${literal}"`,
+          condition: condition,
           license: kind === 'license' ? this.overrideValue : null,
           license_expression: kind === 'expression' ? this.overrideValue : null,
           license_name: null,
