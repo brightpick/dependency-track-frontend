@@ -7,6 +7,7 @@
       PERMISSIONS.POLICY_MANAGEMENT_READ,
       PERMISSIONS.POLICY_MANAGEMENT_UPDATE,
       PERMISSIONS.POLICY_MANAGEMENT_DELETE,
+      PERMISSIONS.COMPONENT_ANALYSIS,
     ]"
   >
     <b-tabs
@@ -14,6 +15,7 @@
       style="border-left: 0; border-right: 0; border-top: 0"
     >
       <b-tab
+        v-if="canManagePolicies"
         ref="policies"
         class="body-bg-color overview-chart"
         style="border-left: 0; border-right: 0; border-top: 0"
@@ -26,7 +28,11 @@
         >
         <policy-list v-on:total="totalPolicies = $event" />
       </b-tab>
-      <b-tab ref="licensegroups" @click="routeTo('licenseGroups')">
+      <b-tab
+        v-if="canManagePolicies"
+        ref="licensegroups"
+        @click="routeTo('licenseGroups')"
+      >
         <template v-slot:title
           ><i class="fa fa-balance-scale"></i>
           {{ $t('message.license_groups') }}
@@ -46,6 +52,7 @@
         <component-policy-list v-on:total="totalComponentPolicies = $event" />
       </b-tab>
       <b-tab
+        v-if="canManagePolicies"
         ref="vulnerability"
         class="body-bg-color overview-chart"
         style="border-left: 0; border-right: 0; border-top: 0"
@@ -81,6 +88,20 @@ export default {
     PolicyList,
     VulnerabilityPolicyList,
   },
+  computed: {
+    // the portfolio policies, license groups and vulnerability policies are
+    // policy management; a user holding only the curation permission sees
+    // the component policies tab alone
+    canManagePolicies() {
+      return this.isPermitted([
+        this.PERMISSIONS.POLICY_MANAGEMENT,
+        this.PERMISSIONS.POLICY_MANAGEMENT_CREATE,
+        this.PERMISSIONS.POLICY_MANAGEMENT_READ,
+        this.PERMISSIONS.POLICY_MANAGEMENT_UPDATE,
+        this.PERMISSIONS.POLICY_MANAGEMENT_DELETE,
+      ]);
+    },
+  },
   data() {
     return {
       totalPolicies: 0,
@@ -107,7 +128,12 @@ export default {
     getTabFromRoute: function () {
       let pattern = new RegExp('/policy\/([^\\/?#]*)', 'gi');
       let tab = pattern.exec(this.$route.fullPath.toLowerCase());
-      return this.$refs[tab && tab[1] ? tab[1].toLowerCase() : 'policies'];
+      // without policy management the policies tab is not rendered: fall
+      // back to the component policies tab
+      return (
+        this.$refs[tab && tab[1] ? tab[1].toLowerCase() : 'policies'] ||
+        this.$refs.componentpolicies
+      );
     },
   },
   mounted() {

@@ -224,6 +224,22 @@
               ])
             "
           />
+          <!-- The BOM-declared license name when it maps to nothing in the
+               license catalogue: the component then has no resolved license,
+               the select above stays empty and the name would otherwise be
+               invisible here although policies judge it. Read-only: the
+               value belongs to the upload, not to the user. -->
+          <b-input-group-form-input
+            v-if="component.license && !component.resolvedLicense"
+            id="component-license-name-declared"
+            input-group-size="mb-3"
+            type="text"
+            :value="component.license"
+            required="false"
+            :readonly="true"
+            :label="$t('message.license_name_declared')"
+            :tooltip="$t('message.component_license_name_declared_desc')"
+          />
           <b-input-group-form-input
             id="component-license-expression"
             input-group-size="mb-3"

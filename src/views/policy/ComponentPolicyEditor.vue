@@ -6,6 +6,7 @@
       PERMISSIONS.POLICY_MANAGEMENT_CREATE,
       PERMISSIONS.POLICY_MANAGEMENT_READ,
       PERMISSIONS.POLICY_MANAGEMENT_UPDATE,
+      PERMISSIONS.COMPONENT_ANALYSIS,
     ]"
   >
     <b-card>
@@ -107,15 +108,38 @@
       <h6>License curation applied on match</h6>
       <b-row>
         <b-col sm="6">
+          <!-- the same two override kinds the component audit offers: a
+               catalogue license, or an SPDX expression of catalogue licenses -->
           <b-form-group
             label="License override"
-            label-for="policy-license"
+            label-for="policy-license-kind"
             description="Applied to matching components on every BOM import"
+          >
+            <b-form-select
+              id="policy-license-kind"
+              v-model="policy.licenseKind"
+              :options="licenseKindOptions"
+            />
+          </b-form-group>
+          <b-form-group
+            v-if="policy.licenseKind === 'license'"
+            label-for="policy-license"
           >
             <b-form-select
               id="policy-license"
               v-model="policy.license"
               :options="selectableLicenses"
+            />
+          </b-form-group>
+          <b-form-group
+            v-if="policy.licenseKind === 'expression'"
+            label-for="policy-license-expression"
+          >
+            <b-form-input
+              id="policy-license-expression"
+              v-model="policy.licenseExpression"
+              placeholder="MIT AND Apache-2.0 — every operand a license of the catalogue (create missing ones on the License page)"
+              trim
             />
           </b-form-group>
         </b-col>
@@ -180,6 +204,14 @@ export default {
         vulns: undefined,
       }),
       selectableLicenses: [],
+      licenseKinds: [
+        { value: '', text: '(no override)' },
+        { value: 'license', text: 'License from the catalogue' },
+        {
+          value: 'expression',
+          text: 'SPDX expression of catalogue licenses, e.g. MIT AND Apache-2.0',
+        },
+      ],
       operationModeOptions: [
         { value: 'APPLY', text: 'Apply' },
         { value: 'DISABLED', text: 'Disabled' },
@@ -192,7 +224,10 @@ export default {
         validFrom: null,
         validUntil: null,
         condition: '',
+        licenseKind: '',
         license: '',
+        licenseExpression: '',
+        licenseName: '',
         details: '',
       },
       conditionTemplates: [
@@ -239,6 +274,19 @@ export default {
       return this.policyId
         ? 'Edit Component Policy'
         : 'Create Component Policy';
+    },
+    licenseKindOptions() {
+      // a stored free-text name is shown so it can be replaced, not offered anew
+      if (this.policy.licenseKind !== 'name') {
+        return this.licenseKinds;
+      }
+      return this.licenseKinds.concat([
+        {
+          value: 'name',
+          text: `Free-text name "${this.policy.licenseName}" (stored — replace with a catalogue license or an expression)`,
+          disabled: true,
+        },
+      ]);
     },
     priorityLabel() {
       const priority = Number(this.policy.priority);
@@ -291,9 +339,20 @@ export default {
           operationMode: policy.enabled ? 'APPLY' : 'DISABLED',
           priority: String(policy.priority),
           validFrom: policy.valid_from ? policy.valid_from.slice(0, 10) : null,
-          validUntil: policy.valid_until ? policy.valid_until.slice(0, 10) : null,
+          validUntil: policy.valid_until
+            ? policy.valid_until.slice(0, 10)
+            : null,
           condition: policy.condition,
+          licenseKind: policy.license
+            ? 'license'
+            : policy.license_expression
+              ? 'expression'
+              : policy.license_name
+                ? 'name'
+                : '',
           license: policy.license || '',
+          licenseExpression: policy.license_expression || '',
+          licenseName: policy.license_name || '',
           details: policy.details || '',
         };
         if (this.$refs.conditionEditor?.setValue) {
@@ -308,7 +367,19 @@ export default {
         enabled: this.policy.operationMode === 'APPLY',
         priority: Number(this.policy.priority) || 0,
         condition: this.policy.condition,
-        license: this.policy.license || null,
+        // exactly one slot, or none: the API rejects two at once
+        license:
+          this.policy.licenseKind === 'license'
+            ? this.policy.license || null
+            : null,
+        license_expression:
+          this.policy.licenseKind === 'expression'
+            ? this.policy.licenseExpression || null
+            : null,
+        license_name:
+          this.policy.licenseKind === 'name'
+            ? this.policy.licenseName || null
+            : null,
         details: this.policy.details || null,
         valid_from: this.policy.validFrom
           ? `${this.policy.validFrom}T00:00:00Z`
@@ -327,9 +398,12 @@ export default {
           this.goBack();
         })
         .catch((error) => {
+          const problem = error.response && error.response.data;
+          const detail = problem && (problem.detail || problem.title);
           this.$toastr.w(
             error.response && error.response.status === 400
-              ? 'Rejected: check the CEL condition and that the license exists'
+              ? detail ||
+                  'Rejected: check the CEL condition and that every license exists in the catalogue'
               : this.$t('condition.unsuccessful_action'),
           );
         });
